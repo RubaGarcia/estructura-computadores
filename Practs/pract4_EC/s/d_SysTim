@@ -1,0 +1,160 @@
+@ Driver del System Timer gestionado por interrupciones
+@ Funciones:
+@	ST_Intr: Inicia el System Timer para que ejecute una tarea
+@                    de forma periodica
+@	ST_RTI: Rutina de atencion que ejecuta la tarea de forma periodica
+@	ST_Off: Detinene la ejecucion de la tarea
+@
+.globl ST_Intr
+.globl ST_Off
+
+@Constantes del System Timer
+.equ SysTimer, 0x20003000
+.equ ST_CS,  0x000
+.equ ST_CLO, 0x004
+.equ ST_CHI, 0x008
+.equ ST_C0,  0x00C
+.equ ST_C1,  0x010
+.equ ST_C2,  0x014
+.equ ST_C3,  0x018
+
+@ Constantes del Controlador de Interrupciones
+.set CI_base, 0x2000B200
+.set CI_BascP, 0x00
+.set CI_IRQ1P, 0x04
+.set CI_IRQ2P, 0x08
+.set CI_BascE, 0x18
+.set CI_IRQ1E, 0x10
+.set CI_IRQ2E, 0x14
+.set CI_BascD, 0x24
+.set CI_IRQ1D, 0x1C
+.set CI_IRQ2D, 0x20
+
+.equ    FALSE,		0x00
+.equ	TRUE,		0x01
+
+
+@ varibles del driver
+.data
+.align 2
+Log_dir_ST:	.word  FALSE
+Log_dir_CI:	.word  FALSE
+Funcion:        .word  FALSE
+Tiempo:         .word  0
+
+
+.Text
+
+ST_Intr:
+STMDB SP!, {R4, LR}
+@guardar parametros
+MOV R4, R0
+LDR R0, =Tiempo
+STR R4, [R0, #0]
+LDR R0, =Funcion
+STR R1, [R0, #0]
+
+@coger direcciones de memoria logicas
+MOV R0, #13
+LDR R1, =SysTimer
+MOV R2, #100
+SWI 0x68
+LDR R0, =Log_dir_ST
+STR R3, [R0, #0]
+MOV R0, #13
+LDR R1, =CI_base
+MOV R2, #100
+SWI 0x68
+LDR R0, =Log_dir_CI
+STR R3, [R0, #0]
+
+@poner la ST_RTI como rutina de atencion
+MOV R0, #3
+LDR R1, =ST_RTI
+MOV R2, #0
+MOV R3, #0
+MOV R4, #0
+SWI 0x4B
+
+@quitar la mascara de interrupciones del comparador 3 y quitar las posibles peticiones existentes
+LDR R0, =Log_dir_ST
+LDR R0, [R0, #0]
+MOV R1, #0x8
+SWI 0x16
+STR R1, [R0, #ST_CS]
+SWI 0x7C
+LDR R0, =Log_dir_CI
+LDR R0, [R0, #0]
+MOV R1, #0x08
+SWI 0x16
+STR R1, [R0, #CI_IRQ1E]
+SWI 0x7C
+
+@habilitar el comparador con un tiempo determinado
+LDR R0, =Log_dir_ST
+LDR R0, [R0, #0]
+SWI 0x16
+LDR R1, [R0, #ST_CLO]
+LDR R4, =Tiempo
+LDR R4, [R4, #0]
+ADD R1, R1, R4
+STR R1, [R0, #ST_C3]
+SWI 0x7C
+
+LDMIA SP!, {R4, PC}
+
+@rutina de atencion
+ST_RTI:
+@salvar contexto
+STMDB SP!,{R0-R2, LR}
+
+@elimina peticion
+LDR R0, =Log_dir_ST
+LDR R0, [R0, #0]
+MOV R1, #0x8
+STR R1, [R0, #ST_CS]
+
+@ir a la funcion pasada
+LDR LR, =Ret_Addr
+LDR R0, =Funcion
+LDR R0, [R0, #0]
+MOV PC, R0
+
+Ret_Addr:
+@vuelvo a coger de nuevo el tiempo
+LDR R0, =Log_dir_ST
+LDR R0, [R0, #0]
+LDR R1, [R0, #ST_CLO]
+LDR R2, =Tiempo
+LDR R2, [R2, #0]
+ADD R1, R1, R2
+STR R1, [R0, #ST_C3]
+
+@restaurar contexto
+LDMIA SP!, {R0-R2, PC}
+
+@ Rutina que desactiva la gestion de las interrupciones
+@
+ST_Off:
+	stmdb 	SP!, {R4, LR}
+
+@ se detine la gestion de las interrupciones
+	mov 	R0, #3
+	ldr 	R1, =ST_RTI
+	mov 	R2, #0
+	mov 	R3, #0
+	mov 	R4, #0
+	SWI 	0x4C		@ OS_ReleaseDeviceVector
+
+@ se enmascara la interrupcion en el Controlador de Interrupciones
+
+	ldr 	R0, =Log_dir_CI
+	ldr 	R0, [R0]
+	mov 	R1, #0x08
+	SWI 	0x16
+	str 	R1, [R0, #CI_IRQ1D]
+	SWI 	0x7C
+
+	ldmia	SP!, {R4, PC}
+
+

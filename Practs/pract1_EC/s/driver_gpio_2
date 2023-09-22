@@ -1,0 +1,104 @@
+.globl prog_gpio_2
+.globl progEv_gpio_2
+.globl leeEv_gpio_2
+.globl clearEv_gpio_2
+.set GPBASE, 0x20200000
+.set GPSEL0, 0x000
+.set GPREN0, 0x04C
+.set GPFEN0, 0x58
+.set GPEDS0, 0x040
+.data
+.align 2
+BASELOGICA: .space 4
+
+.text
+prog_gpio_2:
+SUB SP, SP, #4 @preservo el registro
+STR R4, [SP, #0]
+MOV R4, R0 @guardo el valor de parametro
+MOV R0, #13
+LDR R1,= GPBASE @direccion base
+MOV R2, #0x100
+SWI 0x68 @cojo la direccion logica con SWI OS_MEMORY
+LDR R0,= BASELOGICA
+STR R3, [R0, #0] @guardo la direccion logica en memoria
+SWI 0x16 @entro en modo supervisor
+LDR R0, [R3, #GPSEL0] @obtengo el valor del registro
+BIC R0, R0, #0x1C0 @borro los bits que quiero
+CMP R4, #0
+BNE SEL @si lo quiero como salida salto
+MOV R1, #0x0 @cargo la mascara
+B PROGRAMA1
+SEL:
+MOV R1, #0x40 @cargo la mascara
+PROGRAMA1:
+ORR R0, R0, R1 @pongo la mascara
+STR R0, [R3, #GPSEL0] @guardo el registro
+SWI 0x7C @salgo de modo sistema
+LDR R4, [SP, #0]
+ADD SP, SP, #4
+MOV PC, LR
+
+progEv_gpio_2:
+SUB SP, SP, #4
+STR R4, [SP, #0]
+MOV R4, R0
+LDR R0,=BASELOGICA
+LDR R3, [R0, #0] @cojo la direccion logica de memoria
+SWI 0x16 @entro en modo sistema
+CMP R4, #0
+BNE DESCENDENTE @si se quiere como descendente salto
+MOV R2, #GPREN0 @cargo los offsets de los registros
+MOV R4, #GPFEN0 @cojo los dos para activar un flanco y desactivar el otro
+B PROGRAMA2
+DESCENDENTE:
+MOV R2, #GPFEN0
+MOV R4, #GPREN0
+PROGRAMA2:
+LDR R0, [R3, R2] @cargo el registros
+MOV R1, #0x4 @cargo la mascara
+BIC R0, R0, R1 @limpio el bit que quiero
+ORR R0, R0, R1 @pongo el bit que quiero
+STR R0, [R3, R2] @guardo el registro
+LDR R0, [R3, R4]
+AND R0, R0, R1
+STR R0, [R3, R4]
+LDR R0, [R3, #GPEDS0] @cargo el registro de eventos
+ORR R0, R0, R1 @borro el evento que hubiera de otras operaciones
+STR R0, [R3, #GPEDS0] @cargo el registro
+SWI 0x7C @salgo de modo sistema
+LDR R4, [SP, #0]
+ADD SP, SP, #4
+MOV PC, LR
+
+leeEv_gpio_2:
+SWI 0x16 @entro en modo sistema
+LDR R0,=BASELOGICA
+LDR R3, [R0, #0] @cojo la direccion logica
+LDR R0, [R3, #GPEDS0] @cojo el registro
+SWI 0x7C @salgo de modo sistema
+ANDS R0, R0, #0x4 @compruebo si es evento
+BNE SIEVENTO @si no es cero hay evento
+MOV R0, #0
+B FINAL
+SIEVENTO:
+MOV R0, #1
+FINAL:
+MOV PC, LR
+
+clearEv_gpio_2:
+LDR R0,=BASELOGICA
+LDR R3, [R0, #0] @cojo la direccion logica
+MOV R0, #200 @bucle de perdida de tiempo de 250ms
+BUCLE:
+CMP R0, #0
+BEQ FINBUCLE
+SUB R0, R0, #1
+B BUCLE
+FINBUCLE:
+SWI 0x16 @entro en modo sistema
+LDR R0, [R3, #GPEDS0] @cojo el registro de evento
+ORR R0, R0, #0x4 @borro el evento
+STR R0, [R3, #GPEDS0] @guardo el registro
+SWI 0x7C @salgo de modo supervisor
+MOV PC, LR

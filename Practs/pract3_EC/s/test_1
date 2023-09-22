@@ -1,0 +1,116 @@
+.extern LCD_Ini
+.extern LCD_WChr
+.extern LCD_Clr
+.extern LCD_SetCursor
+.extern LCD_Shift
+
+.data
+.align 2
+Mensaje: .asciz "La practica funciona"
+.align 2
+Mensaje2: .asciz "No lo ves?"
+.align 2
+Mensaje3: .asciz "Esta funcionando"
+.align 2
+Mensaje4: .asciz "Creo que ya se ha comprobado"
+
+.globl _start
+.text
+_start:
+
+BL LCD_Ini @inicializamos
+LDR R4, =Mensaje @direccion de memoria del mensaje
+MOV R5, #0
+MOV R0, #1 @linea 1
+MOV R1, #5 @empiezo en la posicion 5 para que este centrado
+BL LCD_SetCursor @muevo el cursor
+
+WHILELINEA1:
+LDRB R6, [R4, R5]
+CMP R6, #0
+BEQ FINLINEA1
+MOV R0, R6
+BL LCD_WChr @voy escribiendo el mensaje
+ADD R5, R5, #1
+B WHILELINEA1
+
+FINLINEA1:
+LDR R4, =Mensaje2 @direccion de memoria del mensaje
+MOV R5, #0
+MOV R0, #2 @linea 2
+MOV R1, #10 @posicion 10 para que este centrado
+BL LCD_SetCursor @muevo cursor
+
+WHILELINEA2:
+LDRB R6, [R4, R5]
+CMP R6, #0
+BEQ FINLINEA2
+MOV R0, R6
+BL LCD_WChr @voy escribiendo el mensaje
+ADD R5, R5, #1
+B WHILELINEA2
+
+FINLINEA2:
+MOV R4, #23
+DESPLAZA:
+MOV R0, #1
+BL LCD_Shift @desplazo el mensaje a la derecha
+LDR R0, =500000
+BL ST_Delay
+SUBS R4, R4, #1
+BNE DESPLAZA
+MOV R4, #23
+DESPLAZA2:
+MOV R0, #0
+BL LCD_Shift @desplazo el mensaje a la izquierda
+LDR R0, =500000
+BL ST_Delay
+SUBS R4, R4, #1
+BNE DESPLAZA2
+SWI 0x04
+BL LCD_Clr
+
+LDR R4, =Mensaje3 @direccion de memoria del mensaje
+MOV R5, #0
+MOV R0, #1 @linea 1
+MOV R1, #7 @empiezo en la posicion 7 para que este centrado
+BL LCD_SetCursor @muevo el cursor
+
+WHILELINEA3:
+LDRB R6, [R4, R5]
+CMP R6, #0
+BEQ FINLINEA3
+MOV R0, R6
+BL LCD_WChr @voy escribiendo el mensaje
+ADD R5, R5, #1
+B WHILELINEA3
+
+FINLINEA3:
+LDR R4, =Mensaje4 @direccion de memoria del mensaje
+MOV R5, #0
+MOV R0, #2 @linea 2
+MOV R1, #1 @posicion 1 para que este centrado
+BL LCD_SetCursor @muevo cursor
+
+WHILELINEA4:
+LDRB R6, [R4, R5]
+CMP R6, #0
+BEQ FINLINEA4
+MOV R0, R6
+BL LCD_WChr @voy escribiendo el mensaje
+ADD R5, R5, #1
+B WHILELINEA4
+
+FINLINEA4:
+MOV R4, #23
+DESPLAZAMIENTO:
+MOV R0, #1
+BL LCD_Shift @desplazo el mensaje a la derecha
+LDR R0, =500000
+BL ST_Delay
+SUBS R4, R4, #1
+BNE DESPLAZAMIENTO
+SWI 0x04
+BL LCD_Clr
+
+SWI 0x11

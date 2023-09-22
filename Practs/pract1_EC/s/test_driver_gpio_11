@@ -1,0 +1,31 @@
+.extern prog_gpio_11
+.extern valor_gpio_11
+.globl _start
+
+.text
+_start:
+MOV R0, #1
+BL prog_gpio_11 @programo como salida
+MOV R4, #0 @valor de encendido
+MOV R5, #10 @se enciende 5 veces y se apaga 5 veces
+FOR:
+CMP R5, #0
+BEQ FIN
+CMP R4, #0
+BNE ENCENDIDO @si esta encendido salto
+MOV R4, #1 @si esta apagado pongo un 1
+B PROGRAMA
+ENCENDIDO:
+MOV R4, #0 @si esta encedido pongo 0
+PROGRAMA:
+MOV R0, R4
+BL valor_gpio_11 @enciendo o apago
+SUB R5, R5, #1
+LDR R1,=2000 @bucle de perdida de tiempo 1 segundo
+BUCLE:
+CMP R1, #0
+BEQ FOR
+SUB R1, R1, #1
+B BUCLE
+FIN:
+SWI 0x11

@@ -1,0 +1,56 @@
+.extern I2C_Init
+.extern I2C_SendByte
+.extern LCD_Ini
+.extern LCD_Wchr
+.data
+.align 2
+
+P: .word 0x50
+r: .word 0x72
+a: .word 0x61
+c: .word 0x63
+t: .word 0x74
+i: .word 0x69
+O: .word 0x4F
+K: .word 0x4B
+espacio: .word 0x80
+
+.globl _start
+.text
+_start:
+BL LCD_Ini
+LDR R0,=P
+LDR R0, [R0, #0]
+BL LCD_WChr
+LDR R0,=r
+LDR R0, [R0, #0]
+BL LCD_WChr
+LDR R0,=a
+LDR R0, [R0, #0]
+BL LCD_WChr
+LDR R0,=c
+LDR R0, [R0, #0]
+BL LCD_WChr
+LDR R0,=t
+LDR R0, [R0, #0]
+BL LCD_WChr
+LDR R0,=i
+LDR R0, [R0, #0]
+BL LCD_WChr
+LDR R0,=c
+LDR R0, [R0, #0]
+BL LCD_WChr
+LDR R0,=a
+LDR R0, [R0, #0]
+BL LCD_WChr
+LDR R0,=espacio
+LDR R0, [R0, #0]
+BL LCD_WChr
+LDR R0,=O
+LDR R0, [R0, #0]
+BL LCD_WChr
+LDR R0,=K
+LDR R0, [R0, #0]
+BL LCD_WChr
+
+SWI 0x11

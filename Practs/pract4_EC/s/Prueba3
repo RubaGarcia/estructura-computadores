@@ -1,0 +1,82 @@
+.extern hora_Init
+.extern hora_Off
+
+.data
+.align 2
+Abecedario: .byte 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'
+.align 2
+HORA: .asciz "Hora: "
+.align 2
+MINUTO: .asciz "Minuto: "
+.align 2
+SEGUNDO: .asciz "Segundo: "
+.align 2
+DIA: .asciz "Dia: "
+.align 2
+MES: .asciz "Mes: "
+.align 2
+ANHO: .asciz "Anho: "
+.align 2
+hora: .word 0
+fecha: .word 0
+
+.globl _start
+.text
+_start:
+LDR R0, =HORA
+SWI 0x02
+BL read_integer
+LDR R4, =hora
+STRB R0, [R4, #2]
+BL print_integer
+LDR R0, =MINUTO
+SWI 0x02
+BL read_integer
+STRB R0, [R4, #1]
+BL print_integer
+LDR R0, =SEGUNDO
+SWI 0x02
+BL read_integer
+STRB R0, [R4, #0]
+BL print_integer
+
+LDR R0, =ANHO
+SWI 0x02
+BL read_integer
+LDR R4, =fecha
+STRH R0, [R4, #2]
+BL print_integer
+LDR R0, =MES
+SWI 0x02
+BL read_integer
+STRB R0, [R4, #1]
+BL print_integer
+LDR R0, =DIA
+SWI 0x02
+BL read_integer
+STRB R0, [R4, #0]
+BL print_integer
+
+LDR R4, =hora
+LDR R0, [R4, #0]
+LDR R4, =fecha
+LDR R1, [R4, #0]
+BL hora_Init
+
+LDR R4, =Abecedario
+MOV R6, #0
+letra:
+LDRB R5, [R4, R6]
+MOV R0, R5
+SWI 0x00
+LDR R7, =5000
+for:
+SUBS R7, R7, #1
+BNE for
+fin:
+ADD R6, R6, #1
+CMP R6, #26
+BNE letra
+
+BL hora_Off
+SWI 0x11

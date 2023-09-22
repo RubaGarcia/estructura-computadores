@@ -1,0 +1,189 @@
+@ Modulo de gestion de hora y fecha
+@
+@ Funciones publicas:
+@     - hora_Init: inicializa el modulo determiando la hora inicial y la
+@         gestion de la hora usando el System timer. Recibe como parametros
+@         la hora inicial.
+@     - hora_Incr: incrementa en un segundo la hora actual y lo muestra
+@         en el LCD. No recibe parametros ni devuelve resultados.
+@     - hora_Off: detiene el proceso de mostrar la hora.
+@
+.global		hora_Init
+.global		hora_Incr
+.global		hora_Off
+
+.extern LCD_Ini
+.extern LCD_SetCursor
+.extern LCD_WChr
+.extern ST_Intr
+.extern ST_Off
+
+.equ Periodo, 1000000
+
+@  Variables del modulo
+.data
+.align 2
+hora: .space 4
+.align 2
+fecha: .space 4
+.align 2
+puntos: .ascii ":"
+.align 2
+barra: .ascii "/"
+
+@ Funciones
+.text
+
+@funcion de inicializacion
+@R0 lleva la hora
+@R1 lleva la fecha
+@se inicializa el LCD y el SystemTimer
+hora_Init:
+STMDB SP!, {LR}
+LDR R2, =hora
+STR R0, [R2, #0]
+LDR R2, =fecha
+STR R1, [R2, #0]
+BL LCD_Ini
+LDR R0, =Periodo
+LDR R1, =hora_Incr
+BL ST_Intr
+LDMIA SP!, {PC}
+
+
+
+@funcion que actualiza la hora en un segundo
+@sin parametros
+hora_Incr:
+STMDB SP!, {R4-R7, LR}
+LDR R0, =hora
+LDR R1, [R0, #0]
+ADD R1, R1, #1 @anhado un segundo
+AND R2, R1, #0x00000FF @me quedo con el ultimo byte porq quiero los segundos
+CMP R2, #0x3C @con 60
+BLT FIN_HORA
+ADD R1, R1, #0x00000100 @anhado un minuto
+BIC R1, R1, #0x000000FF @elimino segundos como siempre que hace un segundo nuevo compruebo si es 60 no hace falta comprobar que sea mas de 60 porque no va a ocurrir ese caso
+AND R2, R1, #0x0000FF00
+CMP R2, #0x3C00 @con 60
+BLT FIN_HORA
+ADD R1, R1, #0x00010000 @anhado una hora
+LDR R2, =0x0000FFFF
+BIC R1, R1, R2 @elimino minutos y segundos para comprobar que empiece de cero, no hace falta comprobar que sea minutos mayores que 60 porque este caso no ocurre nunca
+CMP R1, #0x180000 @con 24
+BLT FIN_HORA
+LDR R2, =0x00FFFFFF
+BIC R1, R1, R2 @elimino horas, minutos y segundos para empezar un nuevo dia a las 00:00:00
+LDR R3, =fecha
+LDR R4, [R3, #0]
+ADD R4, R4, #1 @anhado un dia
+STR R4, [R3, #0]
+AND R2, R4, #0x000000FF
+CMP R2, #0x1E @con 30
+BLT FIN_HORA
+ADD R4, R4, #0x00000100 @anhado un mes
+BIC R4, R4, #0x000000FE @elimino los dias dejandolo a dia 1 porque los dias y meses se comienzan a 1
+STR R4, [R3, #0]
+AND R2, R4, #0x0000FF00
+CMP R2, #0x0C00 @con 12
+BLT FIN_HORA
+ADD R4, R4, #0x00010000 @anhado un anho
+LDR R2, =0x0000FEFE
+BIC R4, R4, R2 @elimino los meses y dias dejandolo a 1 de enero
+STR R4, [R3, #0]
+FIN_HORA:
+STR R1, [R0, #0]
+
+MOV R0, #1
+MOV R1, #6
+BL LCD_SetCursor
+LDR R4, =hora
+LDRB R5, [R4, #2]
+MOV R0, R5
+BL Div_10
+ADD R0, R0, #0x30
+MOV R5, R1
+BL LCD_WChr
+ADD R0, R5, #0x30
+BL LCD_WChr
+LDR R0, =puntos
+LDRB R0, [R0, #0]
+BL LCD_WChr
+LDRB R5, [R4, #1]
+MOV R0, R5
+BL Div_10
+ADD R0, R0, #0x30
+MOV R5, R1
+BL LCD_WChr
+ADD R0, R5, #0x30
+BL LCD_WChr
+LDR R0, =puntos
+LDRB R0, [R0, #0]
+BL LCD_WChr
+LDRB R5, [R4, #0]
+MOV R0, R5
+BL Div_10
+ADD R0, R0, #0x30
+MOV R5, R1
+BL LCD_WChr
+ADD R0, R5, #0x30
+BL LCD_WChr
+
+MOV R0, #2
+MOV R1, #5
+BL LCD_SetCursor
+LDR R4, =fecha
+LDRB R5, [R4, #0]
+MOV R0, R5
+BL Div_10
+ADD R0, R0, #0x30
+MOV R5, R1
+BL LCD_WChr
+ADD R0, R5, #0x30
+BL LCD_WChr
+LDR R0, =barra
+LDRB R0, [R0, #0]
+BL LCD_WChr
+LDRB R5, [R4, #1]
+MOV R0, R5
+BL Div_10
+ADD R0, R0, #0x30
+MOV R5, R1
+BL LCD_WChr
+ADD R0, R5, #0x30
+BL LCD_WChr
+LDR R0, =barra
+LDRB R0, [R0, #0]
+BL LCD_WChr
+LDRH R5, [R4, #2]
+MOV R0, R5
+BL Div_10
+MOV R5, R1
+BL Div_10
+MOV R6, R1
+BL Div_10
+MOV R7, R1
+ADD R0, R0, #0x30
+BL LCD_WChr
+ADD R0, R7, #0x30
+BL LCD_WChr
+ADD R0, R6, #0x30
+BL LCD_WChr
+ADD R0, R5, #0x30
+BL LCD_WChr
+
+LDMIA SP!, {R4-R7, PC}
+
+
+
+@    Funcion que detiene el proceso de mostrar la hora.
+@
+hora_Off:
+	stmdb	SP!, {LR}
+
+	bl	ST_Off		@ Se debe quitar el comentario de esta
+				@  instruccion en el apartado 3
+
+	ldmia 	SP!, {PC}
+
+

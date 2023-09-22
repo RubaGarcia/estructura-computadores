@@ -1,0 +1,81 @@
+.extern hora_Init
+.extern hora_Incr
+.extern ST_Delay
+.extern read_integer
+.extern print_integer
+
+.equ segundo, 1000000
+
+.data
+.align 2
+HORA: .asciz "Hora: "
+.align 2
+MINUTO: .asciz "Minuto: "
+.align 2
+SEGUNDO: .asciz "Segundo: "
+.align 2
+DIA: .asciz "Dia: "
+.align 2
+MES: .asciz "Mes: "
+.align 2
+ANHO: .asciz "Anho: "
+.align 2
+hora: .word 0
+fecha: .word 0
+
+.globl _start
+.text
+_start:
+LDR R0, =HORA
+SWI 0x02
+BL read_integer
+LDR R4, =hora
+STRB R0, [R4, #2]
+BL print_integer
+LDR R0, =MINUTO
+SWI 0x02
+BL read_integer
+STRB R0, [R4, #1]
+BL print_integer
+LDR R0, =SEGUNDO
+SWI 0x02
+BL read_integer
+STRB R0, [R4, #0]
+BL print_integer
+
+LDR R0, =ANHO
+SWI 0x02
+BL read_integer
+LDR R4, =fecha
+STRH R0, [R4, #2]
+BL print_integer
+LDR R0, =MES
+SWI 0x02
+BL read_integer
+STRB R0, [R4, #1]
+BL print_integer
+LDR R0, =DIA
+SWI 0x02
+BL read_integer
+STRB R0, [R4, #0]
+BL print_integer
+
+LDR R4, =hora
+LDR R0, [R4, #0]
+LDR R4, =fecha
+LDR R1, [R4, #0]
+BL hora_Init
+
+LDR R0, =segundo
+BL ST_Delay
+BL hora_Incr
+
+LDR R0, =segundo
+BL ST_Delay
+BL hora_Incr
+
+LDR R0, =segundo
+BL ST_Delay
+BL hora_Incr
+
+SWI 0x11

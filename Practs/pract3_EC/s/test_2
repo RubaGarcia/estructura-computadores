@@ -1,0 +1,35 @@
+.extern LCD_Ini
+.extern LCD_WString
+
+.data
+.align 2
+Mensaje1: .asciz "Tengo un mensaje de mas de 40 caracteres sin salto de linea e incluso puede ser de mas de 80 caracteres para comprobar que hace todo bien"
+.align 2
+Mensaje2: .ascii "Aqui hay un salto de linea"
+.byte 0xD
+.asciz "como este por ejemplo"
+.align 2
+Mensaje3: .ascii "Y aqui voy a borrar el ultimo"
+.byte 0x8
+.asciz " me he quedado sin o"
+
+.globl _start
+.text
+_start:
+BL LCD_Ini
+LDR R0, =Mensaje1
+SWI 0x2
+BL LCD_WString
+SWI 0x4
+BL LCD_Clr
+LDR R0, =Mensaje2
+SWI 0x2
+BL LCD_WString
+SWI 0x4
+BL LCD_Clr
+LDR R0, =Mensaje3
+SWI 0x2
+BL LCD_WString
+SWI 0x4
+BL LCD_Clr
+SWI 0x11

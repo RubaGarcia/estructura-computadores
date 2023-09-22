@@ -1,0 +1,185 @@
+@ Driver para el uso de una panrtalla LCD de 2x16 (2 lineas de 16 caracteres)
+@       con la conexión I2C
+@
+@ Funciones publicas incluidas:
+@       Funcion de inicializacion (LCD_Ini): inicializa la conexion, el Timer
+@                                            y el propio LCD
+@       Funcion de escritura de un caracter (LCD_WChr)
+@
+.global     LCD_Ini
+.global     LCD_WChr
+.global     BK_ON
+.global     BK_OFF
+
+@ Constantes globales del Driver
+
+@ Direccion del interfaz I2C-LCD en el interfaz I2C
+.equ        Dir_I2CLCD, 0x027
+
+@ Constantes de retrasos necesarios en el LCD
+.equ	Del_Ini1, 4500  	@ Primer retraso en el proceso de inicializacion 4,1 ms
+.equ	Del_Ini2, 110   	@ Segundo retraso en el proceso de inicializacion 100 micro-seg
+.equ	Del_EPuls, 1    	@ Duracion del pulso superior a Enable 230 nano-seg
+.equ	Del_Ope, 100		@ Retraso entre operaciones del LCD 37 micro-seg
+.equ	Del_Clr, 1600	@ Retraso despues de un CLr de al menos 1,5 ms
+
+@ funciones de otros drivers usados
+@ del dirver del I2C
+.extern		I2C_Init
+.extern		I2C_SendByte
+@ del dirver del System Timer
+.extern		ST_Init
+.extern		ST_Delay
+
+.equ    FALSE,		0x00
+.equ	TRUE,		0x01
+
+@ Variables globales del Driver
+.data
+
+.align 2
+
+@ Funciones
+.text
+
+@ Inicializa el uso del LCD
+@ 	No necesita parametros
+@      Inicializa la conexion I2C
+@      Inicializa el timer
+@      Inicializa el LCD
+@      Borra el LCD
+@
+LCD_Ini:
+	stmdb	SP!, {LR}
+
+@ Inicializa la conexion y timer
+
+	bl  	I2C_Init
+	bl	ST_Init
+
+@ Comienzo de la inicializacion del LCD
+	mov	R0, #0x03
+	mov	R1, #0			@ RS = Control
+	bl	W_LCD_4b
+
+	ldr	R0,=Del_Ini1
+	bl	ST_Delay
+
+	mov	R0, #0x03
+	mov	R1, #0			@ RS = Control
+	bl	W_LCD_4b
+
+	ldr	R0,=Del_Ini2
+	bl	ST_Delay
+
+	mov	R0, #0x03
+	mov	R1, #0			@ RS = Control
+	bl	W_LCD_4b
+
+	ldr	R0,=Del_Ini2
+	bl	ST_Delay
+
+	mov	R0, #0x02       @ configura interfaz de 4 bits
+	mov	R1, #0			@ RS = Control
+	bl	W_LCD_4b
+
+	mov	R0, #0x28		@ configura 2 lineas y caracteres de 5x8 puntos
+	mov	R1, #0			@ RS = Control
+	bl	LCD_W_Byte
+
+ 	mov	R0, #0x0E		@ Display on, Cursor on, Blinking off
+	mov	R1, #0			@ RS = Control
+	bl	LCD_W_Byte
+
+	mov	R0, #0x06		@ Movimiento del cursor se incrementa, no shift
+	mov	R1, #0			@ RS = Control
+	bl	LCD_W_Byte
+
+	mov	R0, #0x01		@ Clear Display
+	mov	R1, #0			@ RS = Control
+	bl	LCD_W_Byte
+
+	ldr	R0, =Del_Clr
+	bl	ST_Delay
+
+Fin_Ini:
+	ldmia 	SP!, {PC}
+
+
+@ Funcion de escritura de un caracter en el LCD
+@ 	Parametros:
+@        R0, Caracer a escribir
+LCD_WChr:
+	stmdb	SP!, {LR}
+
+	mov	R1, #1			@ RS = Datos
+	bl	LCD_W_Byte
+
+Fin_WChr:
+	ldmia 	SP!, {PC}
+
+
+@ Funciones auxiliares de manejo del LCD
+
+@ Escribe 4 bits en el LCD
+@   parametros: R0 los 4 bits a escribir
+@               R1 valor de RS
+@   Como es escritura RW siempre vale 0
+@
+@   En los bits 7-4 van los 4 bits de datos
+@   En el bit 3 va el estado de backligth
+@   En el bit 2 va la senal Enable
+@   En el bit 1 va la senal RW
+@   En el bit 0 va la senal RS
+W_LCD_4b:
+	stmdb	SP!, {R4, LR}
+
+	mov	R4, R0
+	lsl	R4, R4, #4
+	and	R4, R4, #0x0F0   	@ los 4 bits de datos van en los bits 4-7
+	and	R1, R1, #0x01
+	orr	R4, R4, R1       	@ RS va en el bit 0
+	orr	R4, R4, #0x08       	@ BK va en el bit 3
+	orr    	R4, R4, #0x04		@ E va en el bit 2 (valor 1)
+
+	mov	R0, R4
+	ldr	R1, =Dir_I2CLCD
+    	bl 	I2C_SendByte
+
+	ldr	R0,=Del_EPuls
+	bl	ST_Delay
+
+	bic   	R4, R4, #04	 		@ E va en el bit 2 (valor 0)
+   	mov	R0, R4
+   	ldr  	R1, =Dir_I2CLCD
+   	bl  	I2C_SendByte
+
+	ldr	R0,=Del_EPuls
+	bl	ST_Delay
+
+	ldmia 	SP!, {R4, PC}
+
+@ Escribe un byte en el interfaz
+@   parametros: R0 el byte a escribir
+@               R1 valor de RS
+@
+LCD_W_Byte:
+	stmdb	SP!, {R4-R5, LR}
+	mov 	R4, R0
+	mov		R5, R1
+
+@ primero se enscriben los 4 bits mas signiticativos
+	and		R0, R0, #0x0F0
+	lsr		R0, R0, #4
+	bl		W_LCD_4b
+
+@ luego los menos significativos
+	and		R0, R4, #0x0F
+	mov		R1, R5
+	bl		W_LCD_4b
+
+	ldr		R0,=Del_Ope
+	bl		ST_Delay
+
+	ldmia 	SP!, {R4-R5, PC}
+

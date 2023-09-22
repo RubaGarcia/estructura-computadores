@@ -1,0 +1,400 @@
+@ Driver para el uso de una panrtalla LCD de 2x16 (2 lineas de 16 caracteres)
+@       con la conexion I2C
+@
+@ Funciones publicas incluidas:
+@       Funcion de inicializacion (LCD_Ini): inicializa la conexion, el Timer
+@                                            y el propio LCD
+@       Funcion de escritura de un caracter (LCD_WChr)
+@
+.global     LCD_Ini
+.global     LCD_WChr
+.global     LCD_Clr
+.global     LCD_SetCursor
+.global     LCD_Shift
+.global     LCD_WString
+.global     BK_ON
+.global     BK_OFF
+
+@ Constantes globales del Driver
+
+@ Direccion del interfaz I2C-LCD en el interfaz I2C
+.equ        Dir_I2CLCD, 0x027
+
+@ Constantes de retrasos necesarios en el LCD
+.equ	Del_Ini1, 4500  	@ Primer retraso en el proceso de inicializacion 4,1 ms
+.equ	Del_Ini2, 110   	@ Segundo retraso en el proceso de inicializacion 100 micro-seg
+.equ	Del_EPuls, 1    	@ Duracion del pulso superior a Enable 230 nano-seg
+.equ	Del_Ope, 100		@ Retraso entre operaciones del LCD 37 micro-seg
+.equ	Del_Clr, 1600	        @ Retraso despues de un CLr de al menos 1,5 ms
+
+@ funciones de otros drivers usados
+@ del dirver del I2C
+.extern		I2C_Init
+.extern		I2C_SendByte
+@ del dirver del System Timer
+.extern		ST_Init
+.extern		ST_Delay
+
+.equ    FALSE,		0x00
+.equ	TRUE,		0x01
+
+@ Variables globales del Driver
+.data
+
+.align 2
+
+pos: .word 0
+
+@ Funciones
+.text
+
+@ Inicializa el uso del LCD
+@ 	No necesita parametros
+@      Inicializa la conexion I2C
+@      Inicializa el timer
+@      Inicializa el LCD
+@      Borra el LCD
+@
+LCD_Ini:
+	stmdb	SP!, {LR}
+
+@ Inicializa la conexion y timer
+
+	bl  	I2C_Init
+	bl	ST_Init
+
+@ Comienzo de la inicializacion del LCD
+	mov	R0, #0x03
+	mov	R1, #0			@ RS = Control
+	bl	W_LCD_4b
+
+	ldr	R0,=Del_Ini1
+	bl	ST_Delay
+
+	mov	R0, #0x03
+	mov	R1, #0			@ RS = Control
+	bl	W_LCD_4b
+
+	ldr	R0,=Del_Ini2
+	bl	ST_Delay
+
+	mov	R0, #0x03
+	mov	R1, #0			@ RS = Control
+	bl	W_LCD_4b
+
+	ldr	R0,=Del_Ini2
+	bl	ST_Delay
+
+	mov	R0, #0x02       @ configura interfaz de 4 bits
+	mov	R1, #0			@ RS = Control
+	bl	W_LCD_4b
+
+	mov	R0, #0x28		@ configura 2 lineas y caracteres de 5x8 puntos
+	mov	R1, #0			@ RS = Control
+	bl	LCD_W_Byte
+
+ 	mov	R0, #0x0E		@ Display on, Cursor on, Blinking off
+	mov	R1, #0			@ RS = Control
+	bl	LCD_W_Byte
+
+	mov	R0, #0x06		@ Movimiento del cursor se incrementa, no shift
+	mov	R1, #0			@ RS = Control
+	bl	LCD_W_Byte
+
+	mov	R0, #0x01		@ Clear Display
+	mov	R1, #0			@ RS = Control
+	bl	LCD_W_Byte
+
+	ldr	R0, =Del_Clr
+	bl	ST_Delay
+
+Fin_Ini:
+	ldmia 	SP!, {PC}
+
+
+@ Funcion de escritura de un caracter en el LCD
+@ 	Parametros:
+@        R0, Caracer a escribir
+LCD_WChr:
+	stmdb	SP!, {LR}
+
+	mov	R1, #1			@ RS = Datos
+	bl	LCD_W_Byte
+
+Fin_WChr:
+
+        LDR R0, =pos
+        LDR R1, [R0, #0]
+        ADD R1, R1, #1
+        STR R1, [R0, #0]
+
+	ldmia 	SP!, {PC}
+
+
+@ Funciones auxiliares de manejo del LCD
+
+@ Escribe 4 bits en el LCD
+@   parametros: R0 los 4 bits a escribir
+@               R1 valor de RS
+@   Como es escritura RW siempre vale 0
+@
+@   En los bits 7-4 van los 4 bits de datos
+@   En el bit 3 va el estado de backligth
+@   En el bit 2 va la senal Enable
+@   En el bit 1 va la senal RW
+@   En el bit 0 va la senal RS
+W_LCD_4b:
+	stmdb	SP!, {R4, LR}
+
+	mov	R4, R0
+	lsl	R4, R4, #4
+	and	R4, R4, #0x0F0   	@ los 4 bits de datos van en los bits 4-7
+	and	R1, R1, #0x01
+	orr	R4, R4, R1       	@ RS va en el bit 0
+	orr	R4, R4, #0x08       	@ BK va en el bit 3
+	orr    	R4, R4, #0x04		@ E va en el bit 2 (valor 1)
+
+	mov	R0, R4
+	ldr	R1, =Dir_I2CLCD
+    	bl 	I2C_SendByte
+
+	ldr	R0,=Del_EPuls
+	bl	ST_Delay
+
+	bic   	R4, R4, #04	 		@ E va en el bit 2 (valor 0)
+   	mov	R0, R4
+   	ldr  	R1, =Dir_I2CLCD
+   	bl  	I2C_SendByte
+
+	ldr	R0,=Del_EPuls
+	bl	ST_Delay
+
+	ldmia 	SP!, {R4, PC}
+
+@ Escribe un byte en el interfaz
+@   parametros: R0 el byte a escribir
+@               R1 valor de RS
+@
+LCD_W_Byte:
+	stmdb	SP!, {R4-R5, LR}
+	mov 	R4, R0
+	mov		R5, R1
+
+@ primero se enscriben los 4 bits mas signiticativos
+	and		R0, R0, #0x0F0
+	lsr		R0, R0, #4
+	bl		W_LCD_4b
+
+@ luego los menos significativos
+	and		R0, R4, #0x0F
+	mov		R1, R5
+	bl		W_LCD_4b
+
+	ldr		R0,=Del_Ope
+	bl		ST_Delay
+
+	ldmia 	SP!, {R4-R5, PC}
+
+@borrado de todo el LCD, sin parametros ni devolucion
+LCD_Clr:
+STMDB SP!, {LR}
+MOV R0, #0x01 @borrado del lcd
+MOV R1, #0x00 @RS de control
+BL LCD_W_Byte
+LDR R0, =Del_Clr
+BL ST_Delay
+MOV R0, #0 @pongo un cero en la posicion
+LDR R1, =pos
+STR R0, [R1, #0]
+LDMIA SP!, {PC}
+
+@coloca el cursor en la posicion indicada,  R0 linea, R1 posicion, sin devolucion
+LCD_SetCursor:
+STMDB SP!, {R4, R5, LR}
+CMP R0, #0 @compruebo que sea una linea y posicion valida
+BLE FIN
+CMP R0, #3
+BGE FIN
+CMP R1, #0
+BLE FIN
+CMP R1, #41
+BGE FIN
+MOV R4, R0 @guardo registros
+MOV R5, R1
+SUB R5, R5, #1 @resto uno para que sea desde cero
+LDR R0, =pos @guardo la posicion en la que esta
+STR R5, [R0, #0]
+CMP R4, #1 @hago diferencias entre si voy a linea 1 o 2
+ADDNE R5, R5, #0x40 @sumo la primera linea si es la linea 2 para tener conseguir la posicion que busco
+ORR R0, R5, #0x80 @meto el uno necesario para el comando
+MOV R1, #0 @RS de contol
+BL LCD_W_Byte
+LDR R0, =Del_Ope
+BL ST_Delay
+FIN:
+LDMIA SP!, {R4, R5, PC}
+
+@desplazo la pantalla una posicion, R0 sentido, sin devolucion
+LCD_Shift:
+STMDB SP!, {R4-R6, LR}
+LDR R6, =pos @saco la posicion
+LDR R5, [R6, #0]
+CMP R0, #0 @miro izquierda
+BEQ IZQ
+CMP R0, #1 @miro derecha
+BNE FINS
+MOV R0, #0x18 @cargo derecha
+MOV R4, #0x29 @compruebo que llegue a la ultima posicion
+B SHIFT
+IZQ:
+MOV R0, #0x1C @cargo izquierda
+MOV R4, #0x29
+SHIFT:
+CMP R5, R4 @que no sea la posicion
+BEQ FINS
+MOV R1, #0
+BL LCD_W_Byte
+LDR R0, =Del_Ope
+BL ST_Delay
+FINS:
+LDMIA SP!, {R4-R6, LR}
+
+@borro una linea de la pantalla, R0 linea, sin devolucion
+LCD_BorradoLinea:
+STMDB SP!, {R4, LR}
+CMP R0, #1 @miro que linea voy a borrar
+BEQ BORRADO
+CMP R0, #2
+BNE FINBORRADO
+BORRADO:
+MOV R4, #0x28 @de la 39 a la 0 van 40 caracteres
+MOV R1, #1 @posicion 1
+BL LCD_SetCursor @coloco el cursor en la linea a borrar posicion 1
+BUCLE_BORRADO:
+CMP R4, #0 @hasta llegar a la ultima posicion
+BEQ FINBORRADO
+MOV R0, #0x80 @meto un espacio
+BL LCD_WChr
+SUB R4, R4, #1
+B BUCLE_BORRADO
+FINBORRADO:
+MOV R1, #0
+LDR R0, =pos @guardo un 0 en la posicion
+STR R1, [R0, #0]
+LDMIA SP!, {R4, PC}
+
+@escribo un mensaje en la pantalla, R0 direccion de memoria, sin devolucion
+LCD_WString:
+STMDB SP!, {R4-R8, LR}
+MOV R4, #0 @posicion del string
+MOV R5, R0 @direccion de string
+MOV R6, #1 @linea
+MOV R7, #0 @posicion del cursor
+
+RECORRER_STRING:
+LDRB R0, [R5, R4]
+CMP R0, #0 @que no se haya acabado el string
+BEQ FINFUNCION
+
+CMP R0, #0xD @comprobar si es el caracter de salto de linea
+BNE SIGUIENTE
+MOV R8, R7
+LDR R0, =333333
+BL ST_Delay
+CMP R6, #1 @si es linea 1 salto a la 2
+BNE BORRADO_NUEVA_LINEA
+MOV R0, #2
+MOV R1, #1
+BL LCD_SetCursor @me coloco en la siguiente linea
+MOV R6, #2
+MOV R7, #0
+B BUCLE_RECORRE_STRING
+
+BORRADO_NUEVA_LINEA:
+LDR R0, =2000000 @si es linea 2 espero 2 segundos, borro la linea 1 y me pongo en la linea 1
+BL ST_Delay
+MOV R0, #1
+BL LCD_BorradoLinea
+MOV R0, #1
+MOV R1, #1
+BL LCD_SetCursor
+MOV R6, #1
+MOV R7, #0
+B BUCLE_RECORRE_STRING
+
+SIGUIENTE:
+CMP R0, #0x8 @si es el borrado de un caracter
+BNE CARACTER_NORMAL
+CMP R7, #0 @si es la primera posicion no hago nada
+BEQ ESCRIBIR
+LDR R0, =333333
+BL ST_Delay
+MOV R0, R6
+MOV R1, R7
+BL LCD_SetCursor @cursor en la posicion anterior
+MOV R0, #0x80 @meto un espacio
+BL LCD_WChr
+MOV R0, R6
+MOV R1, R7
+BL LCD_SetCursor @me vuelvo a poner en la posicion borrada
+MOV R0, #0
+BL LCD_Shift @desplazo de vuelta al q he borrado
+SUB R7, R7, #1
+B ESCRIBIR
+
+CARACTER_NORMAL:
+ADD R7, R7, #1
+BL LCD_WChr @escribo
+LDR R0, =333333 @delay de medio segundo
+BL ST_Delay
+
+CMP R7, #0x29 @miro si he escrito 40
+BEQ SALTO_LINEA
+DESP_DER:
+CMP R7, #17 @desplazamiento de uno a la derecha si he superado los 16 caracteres
+BLT ESCRIBIR
+MOV R0, #1
+BL LCD_Shift
+
+SALTO_LINEA:
+MOV R8, R7
+CMP R7, #0x28 @si es la ultima posicion de la linea me cambio de linea
+BNE ESCRIBIR
+CMP R6, #1 @si es la primera linea paso a la segunda
+BNE BORRARLINEA1
+MOV R0, #2 @borro la linea y me coloco en la primera posicion
+BL LCD_BorradoLinea
+MOV R0, #2
+MOV R1, #1
+BL LCD_SetCursor
+MOV R6, #2
+MOV R7, #0
+B BUCLE_RECORRE_STRING
+
+BORRARLINEA1:
+LDR R0, =2000000 @si es linea 2 espero 2 segundos, borro la linea 1 y me pongo en la linea 1
+BL ST_Delay
+MOV R0, #1
+BL LCD_BorradoLinea
+MOV R0, #1
+MOV R1, #1
+BL LCD_SetCursor
+MOV R6, #1
+MOV R7, #0
+
+BUCLE_RECORRE_STRING:
+SUB R8, R8, #16 @me desplazo todo lo que haya escrito menos los 16 de la pantalla
+VUELTA:
+CMP R8, #0
+BEQ ESCRIBIR
+MOV R0, #0
+BL LCD_Shift
+SUB R8, R8, #1
+B VUELTA
+
+ESCRIBIR:
+ADD R4, R4, #1
+B RECORRER_STRING
+
+FINFUNCION:
+LDMIA SP!, {R4-R8, PC}

@@ -1,0 +1,39 @@
+.extern prog_gpio_11
+.extern valor_gpio_11
+.extern prog_gpio_2
+.extern progEv_gpio_2
+.extern leeEv_gpio_2
+.extern clearEv_gpio_2
+.globl _start
+
+.text
+_start:
+MOV R0, #1
+BL prog_gpio_11 @programo led como salida
+MOV R0, #0
+BL prog_gpio_2 @programo pulsador como entrada
+MOV R0, #0
+BL progEv_gpio_2 @programo deteccion de flanco ascendente
+MOV R5, #10 @bucle de 10 iteraciones
+MOV R4, #0 @guardo si esta encendido o apagado
+BUCLEENCIENDE:
+CMP R5, #0
+BEQ FIN
+EVENTO:
+BL leeEv_gpio_2 @leo si hay evento
+CMP R0, #0
+BEQ EVENTO @si no hay evento espero a leer
+BL clearEv_gpio_2 @borro el evento
+CMP R4, #0
+BNE APAGAR @salto si esta encendido
+MOV R4, #1 @guardo para encender
+B FUNCION
+APAGAR:
+MOV R4, #0 @guardo para apagar
+FUNCION:
+MOV R0, R4
+BL valor_gpio_11 @apago o enciendo
+SUB R5, R5, #1
+B BUCLEENCIENDE
+FIN:
+SWI 0x11

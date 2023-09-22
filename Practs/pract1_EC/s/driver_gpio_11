@@ -1,0 +1,63 @@
+.globl prog_gpio_11
+.globl valor_gpio_11
+.set GPBASE, 0x20200000
+.set GPSEL1, 0x004
+.set GPCLR0, 0x028
+.set GPSET0, 0x01C
+.data
+.align 2
+DIRLOGICA: .space 4
+
+.text
+prog_gpio_11:
+SUB SP, SP, #4
+STR R4, [SP,#0]
+MOV R4, R0 @muevo el valor de entrada de la subrutina a otr reg
+MOV R0, #13 @pongo los valores necesarios para la llamada al sistema
+LDR R1, =GPBASE
+MOV R2, #0x100
+SWI 0x68 @llamada al sistema OS_MEMORY
+LDR R0, =DIRLOGICA
+STR R3, [R0, #0] @guardo la direccion logica
+SWI 0x16 @llamada al sistema para entrar a modo supervisor
+LDR R0, [R3, #GPSEL1] @accedo al registro de seleccion del dispositivo GPIO
+MOV R1, #0x38 @cargo la mascara
+BIC R0, R0, R1 @combino los bits con la mascara
+CMP R4, #0 @comparo para comprobar si se quiere de entrada o de salida
+BNE SI @si es de salida salto
+MOV R1, #0
+B PROGRAMA
+SI:
+MOV R1, #0x8
+PROGRAMA:
+ORR R0, R0, R1
+STR R0, [R3, #GPSEL1] @guardo el contenido en el registro de antes
+SWI 0x7C @llamada al sistema para salir del modo supervisor
+LDR R4, [SP, #0]
+ADD SP, SP, #4
+MOV PC, LR
+
+valor_gpio_11:
+SUB SP, SP, #4
+STR R4, [SP, #0]
+MOV R4, R0 @muevo el valor que le entra a la subrutina a otro registro
+LDR R0, =DIRLOGICA
+LDR R3, [R0, #0] @cojo la direccion logica
+SWI 0x16 @llamo al sistema para entrar en modo supervisor
+CMP R4, #0 @comparo si quiero corriente o no
+BNE SET @si quiero corriente salto
+MOV R2, #GPCLR0 @muevo a un registro la constante del registro que necesito
+B PROG
+SET:
+MOV R2, #GPSET0
+PROG:
+LDR R0, [R3, R2]
+@accedo al registro que necesito dependiendo si quiero corriente o no
+MOV R1, #0x800 @cargo la mascara
+BIC R0, R0, R1 @combino el valor del registro con el que quiero
+ORR R0,#0x800
+STR R0, [R3, R2] @guardo el contenido en el registro del que lo he sacado
+SWI 0x7C @llamo al sistema para salir del modo supervisor
+LDR R4,[SP, #0]
+ADD SP, SP, #4
+MOV PC, LR

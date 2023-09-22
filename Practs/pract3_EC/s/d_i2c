@@ -1,0 +1,149 @@
+@ Driver de uso del I2C en I2C-1
+@  Se definen dos funciones:
+@        I2C_Init que inicializa la conexion I2C
+@        I2C_SendByte que manda un Byte por el puerto I2C
+.global I2C_Init
+.global I2C_SendByte
+
+@ Constantes de I2C-1
+@
+.equ 	I2C_BASE, 0x20804000
+.equ 	I2C_CONTROL, 0x0
+.equ 	I2C_STATUS, 0x4
+.equ 	I2C_DLEN, 0x8                  @longitud transferencia R/W
+.equ 	I2C_SLAVE_ADDRESS, 0xC         @Direccion slave
+.equ 	I2C_FIFO, 0x10                 @FIFO datos R/W
+.equ    I2C_ClockDiv, 0x14
+.equ    I2C_DataDelay, 0x018
+
+@ conexionado
+.equ	I2C_SDA, 2	@ senal SDA usa el GPIO2 (pin 3 de la Rpi)
+.equ	I2C_SCL, 3	@ senal SCL usa el GPIO3 (pin 5 de la Rpi)
+
+@ otras conexiones del interfaz I2C-LCD
+@    senal de Tierra            (GND)  conectada a GND (pin 6 de la Rpi)
+@    senal de alimentacion      (Vcc) del interfaz I2C-LCD conectada a +5V (pin 4 de la Rpi)
+
+@ Codigo de funcion espcial para el uso de I2C-1
+.equ	Func_I2C, 0    @ es la funcion ALT0
+
+@ Valor del registro de control en la inicializacion
+.equ I2C_IniControl, 0x08020	@ habilita el dispositivo y Clear FIFO
+
+@ Drivers usados
+.extern	ini_gpio		   	@ Inicializa el uso del GPIO
+.extern	prog_esp_gpio  		@ Programa un pin GPIO como funcion especial
+
+.equ    FALSE,		0x00
+.equ	TRUE,		0x01
+
+.data
+.align 2
+dirlogic_I2C:   .word     FALSE
+
+
+.text
+@ Funcion que inicializa la comunicacion I2C
+@  No recibe parametros y devuelve en R0 el valor TRUE si ya estaba inicializado
+@                      FALSE si no lo estaba
+
+I2C_Init:
+	stmdb	SP!, {LR}
+
+@ Se determina la direccion logica del dispositivo
+	ldr 	R0, =dirlogic_I2C
+	ldr 	R0, [R0]		@ Direccion logica del GPIO
+
+	cmp	R0, #FALSE
+	bne	fin_I2C_Init		@ si direccion logica no es FALSE ya esta inicializado
+	 				@ y no hace falta hacer nada mas
+
+	mov 	R0, #13
+	ldr 	R1, =I2C_BASE
+	mov 	R2, #0x100
+	SWI 	0x68
+	ldr 	R0, =dirlogic_I2C
+	str 	R3, [R0]
+
+@ Se inicializa el gpio
+	bl	ini_gpio
+
+@ Se usa el conexionado I2C1
+@ Se programan los pines como funcion especial
+	mov	R0, #I2C_SDA
+	mov	R1, #Func_I2C
+	bl	prog_esp_gpio
+
+	mov	R0, #I2C_SCL
+	mov	R1, #Func_I2C
+	bl	prog_esp_gpio
+
+@ Habilita el controlador
+	ldr 	R0, =dirlogic_I2C
+	ldr 	R0, [R0]
+
+	ldr	R1, =I2C_IniControl
+
+	SWI 	0x16
+	STR 	R1,[R0, #I2C_CONTROL]
+	SWI 	0x7C
+
+	mov	R0, #FALSE
+
+fin_I2C_Init:
+	ldmia 	SP!, {PC}
+
+
+@ Funcion que realiza el envio de un Byte por el puerto I2C
+@ Recibe 2 parametros:
+@	Byte a transmitir
+@	Direccion I2C del dispositivo destino
+@ Retorna TRUE si el I2C no esta inicializado
+@         FALSE si todo OK
+@
+I2C_SendByte:
+
+STMDB SP!, {R4, LR}
+LDR R2, =dirlogic_I2C @cojo la direccion del I2C para comprobar si se ha inicializado el dispositivo
+LDR R4, [R2, #0]
+CMP R4, #FALSE @comparo con false porque es el valor que tiene si no esta inicializado
+BEQ FIN_NO_INI
+SWI 0x16
+
+BUCLE1:
+LDR R2, [R4, #I2C_STATUS]
+ANDS R2, R2, #0x1 @compruebo el TA
+BEQ OUT_BUCLE1
+B BUCLE1
+
+OUT_BUCLE1:
+
+STR R0, [R4, #I2C_FIFO] @meto el dato en la FIFO
+
+STR R1, [R4, #I2C_SLAVE_ADDRESS] @guardo la direccion del dispositivo
+
+MOV R2, #1 @digo el byte que voy a enviar
+STR R2, [R4, #I2C_DLEN]
+
+LDR R2, [R4, #I2C_CONTROL] @cargo el registro de control
+BIC R2, R2, #1 @bit 0 read a 1 para escribir
+ORR R2, R2, #0x80 @pongo el bit 7 (st) a 1
+STR R2, [R4, #I2C_CONTROL]
+
+BUCLE:
+LDR R2, [R4, #I2C_STATUS]
+ANDS R3, R2, #0x2 @compruebo el DONE
+BNE OUT_BUCLE
+B BUCLE
+
+OUT_BUCLE:
+MOV R3, #0x02
+STR R3, [R4, #I2C_STATUS]
+SWI 0x7C
+MOV R0, #FALSE @devuelvo segun si estaba inicializado
+B FIN
+FIN_NO_INI:
+MOV R0, #TRUE
+
+FIN:
+LDMIA SP!, {R4, PC}
