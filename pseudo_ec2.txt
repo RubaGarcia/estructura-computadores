@@ -28,6 +28,7 @@ bic = 111*despl
 .globl prog_gpio_11
 .globl valor_gpio_11
 .set GPBASE, 0x20200000
+<<<<<<< HEAD
 
 .set GPSEL0, 0x000
 .set GPSEL1, 0x004
@@ -36,6 +37,9 @@ bic = 111*despl
 .set GPSEL4, 0x010
 .set GPSEL5, 0x014
 
+=======
+@.set GPSEL1, 0x004
+>>>>>>> e7b284a6768d9355c7c5a42202d0e99353d37def
 .set GPCLR0, 0x028
 .set GPSET0, 0x01C
 
@@ -59,7 +63,7 @@ blt r5,#10
 
 .text
 prog_gpio_10:
-SUB SP, SP, #4
+SUB SP, SP, #8
 STR R4, [SP,#0]
 MOV R4, R0 @muevo el valor de entrada de la subrutina a otr reg
 MOV R0, #13 @pongo los valores necesarios para la llamada al sistema
@@ -69,7 +73,33 @@ SWI 0x68 @llamada al sistema OS_MEMORY
 LDR R0, =DIRLOGICA
 STR R3, [R0, #0] @guardo la direccion logica
 SWI 0x16 @llamada al sistema para entrar a modo supervisor
-LDR R0, [R3, #GPSEL1] @accedo al registro de seleccion del dispositivo GPIO
+
+
+
+
+@LDR R0, [R3, #GPSEL1] @accedo al registro de seleccion del dispositivo GPIO
+
+mov r5, 0x14
+    
+while_loop:
+    @ Comparación de i con 10
+    CMP r0, #10
+    BLE exit_loop  @ Salir del bucle si i <= 10
+    
+    ; Restar 10 a i
+    SUB r0, R0, #10
+    B while_loop   @ Volver al principio del bucle
+    
+exit_loop:
+    SUB r2, r0, #5
+    LSL r2, r2, #2  @ Multiplicar por 4 (0x04)
+    SUB r5, r5, r2  @ Restar el resultado de gpsel
+    
+    ; En este punto, r0 contiene el valor final de gpsel después del bucle.
+Este código en ensamblador ARM realiza un bucle while que disminuye el valor de i en 10 hasta que i sea menor o igual a 10. Luego, calcula (i - 5) * 0x04 y resta este valor de gpsel. Ten en cuenta que los registros y las convenciones de llamada pueden variar según el entorno de desarrollo y el sistema operativo en el que se esté trabajando. Asegúrate de ajustar el código según sea necesario para tu plataforma específica.
+
+
+
 MOV R1, #0x38 @cargo la mascara
 BIC R0, R0, R1 @combino los bits con la mascara                                     @con el 111*despl + modo de funcionamiento
 CMP R4, #0 @comparo para comprobar si se quiere de entrada o de salida
@@ -77,16 +107,70 @@ BNE SI @si es de salida salto
 MOV R1, #0
 B PROGRAMA
 SI:
-MOV R1, #0x8
-PROGRAMA:
-ORR R0, R0, R1
-STR R0, [R3, #GPSEL1] @guardo el contenido en el registro de antes
-SWI 0x7C @llamada al sistema para salir del modo supervisor
-LDR R4, [SP, #0]
+    MOV R1, #0x8
+    PROGRAMA:
+        ORR R0, R0, R1
+        STR R0, [R3, R5] @guardo el contenido en el registro de antes
+        SWI 0x7C @llamada al sistema para salir del modo supervisor
+        LDR R4, [SP, #0]
+        ADD SP, SP, #8
+MOV PC, LR
+
+
+<<<<<<< HEAD
+=======
+gpsel=0x14
+while i > 10{
+    i-=10
+
+}
+gpsel-=(i-5)*0x04
+
+
+#tiene 2 parametros: el led que se va a encender y si se va a encender o apagar
+void valor_led(num_led, salida)
+    #ini_gpio(10,entrada)
+
+    #modo supervisor
+    #settear el registro de control del led en funcion de encenderse o apagarse
+    if salida = 1
+        gpset0 = 1
+    else 
+        gpclr=1
+    
+
+
+valor_gpio_10:
+SUB SP, SP, #4
+STR R4, [SP, #0]
+MOV R4, R0 @muevo el valor que le entra a la subrutina a otro registro
+LDR R0, =DIRLOGICA
+LDR R3, [R0, #0] @cojo la direccion logica
+SWI 0x16 @llamo al sistema para entrar en modo supervisor
+CMP R4, #0 @comparo si quiero corriente o no
+BNE SET @si quiero corriente salto
+MOV R2, #GPCLR0 @muevo a un registro la constante del registro que necesito
+B PROG
+SET:
+MOV R2, #GPSET0
+PROG:
+LDR R0, [R3, R2]
+@accedo al registro que necesito dependiendo si quiero corriente o no
+MOV R1, #0x800 @cargo la mascara
+
+BIC R0, R0, R1 @combino el valor del registro con el que quiero
+ORR R0,#0x800
+STR R0, [R3, R2] @guardo el contenido en el registro del que lo he sacado
+SWI 0x7C @llamo al sistema para salir del modo supervisor
+LDR R4,[SP, #0]
 ADD SP, SP, #4
 MOV PC, LR
 
 
+
+
+
+>>>>>>> e7b284a6768d9355c7c5a42202d0e99353d37def
 void main(){
     
     ini_gpio(10,entrada)
