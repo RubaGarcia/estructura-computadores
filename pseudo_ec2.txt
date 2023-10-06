@@ -269,6 +269,7 @@ pos_servo:
     beq valor_l1
     cmp r4,#0
     beq valor_0
+
     
 
 
