@@ -91,3 +91,26 @@ SWI 0x7C @llamo al sistema para salir del modo supervisor
 LDR R4,[SP, #0]
 ADD SP, SP, #4
 MOV PC, LR
+
+
+
+valor_gpio:
+stmdb sp!,r4
+mov r4,r0
+ldr r0,=DIRLOGICA
+ldr r3,[r0,#0]
+swi 0x16
+cmp r4,#0
+bne set
+mov r2,#GPCLR0
+b prog
+set:
+    mov r2,#GPSET0
+prog:
+    ldr r0,[r3,r2]
+    mov r1,#0x800
+    bic r0,r0,r1
+    orr r0,r1
+    str r0,[r3,r2]
+    swi 0x7c
+ldmia sp!,r4
